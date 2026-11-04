@@ -1,39 +1,71 @@
-# Deployment
+# Vercel deployment
 
-## Vercel frontend with Railway backend
+Vercel hosts both the Vite frontend and the Express API. Supabase provides persistent Postgres storage; the Vercel filesystem is not used for application data.
 
-The frontend can be hosted on Vercel, but the Express API and SQLite database must remain on a persistent service such as Railway. Vercel's serverless filesystem is not persistent and cannot safely store this app's SQLite database.
+## 1. Create the Supabase database
 
-### 1. Deploy the backend to Railway
+1. Create a Supabase project and open **SQL Editor**.
+2. Run this SQL to create the private application tables:
 
-1. Push the project to a private GitHub repository. Do not commit `data/factory.db`, `data/admin.secret`, `data/factory-data.json`, or `.env`; `.gitignore` excludes these files.
-2. In Railway, create a project from the repository.
-3. Add a persistent volume to the service and mount it at `/data`.
-4. Add these service variables:
-   - `DATA_DIR=/data`
-   - `NODE_ENV=production`
-   - `ADMIN_SECRET=<unique random secret with at least 32 characters>`
+```sql
+create table public.app_state (
+  id integer primary key check (id = 1),
+  payload jsonb not null
+);
 
-Generate a secret locally with:
+create table public.auth_sessions (
+  token_hash text primary key,
+  role text not null check (role in ('admin', 'worker')),
+  worker_id text,
+  worker_name text not null,
+  expires_at timestamptz not null
+);
+
+create index auth_sessions_expires_at_idx
+  on public.auth_sessions (expires_at);
+
+create table public.login_attempts (
+  ip_hash text primary key,
+  count integer not null check (count >= 0),
+  reset_at timestamptz not null
+);
+
+alter table public.app_state enable row level security;
+alter table public.auth_sessions enable row level security;
+alter table public.login_attempts enable row level security;
+```
+
+The app accesses these tables only through the server using its service-role key. Do not add public/anonymous access policies.
+
+3. In Supabase project settings, copy the project URL and the server-side `service_role` key. Keep the key private.
+
+## 2. Configure and deploy on Vercel
+
+1. Import the GitHub repository into Vercel.
+2. Add these environment variables to the Vercel project (at least for **Production**):
+   - `SUPABASE_URL` = the Supabase project URL, such as `https://your-project.supabase.co`
+   - `SUPABASE_SERVICE_ROLE_KEY` = the Supabase server-side service-role key
+   - `ADMIN_SECRET` = a unique administrator secret of at least 16 characters
+3. Generate an administrator secret locally in PowerShell with:
 
 ```powershell
 node -p "require('crypto').randomBytes(32).toString('base64url')"
 ```
 
-Paste the generated value directly into Railway's `ADMIN_SECRET` variable. Do not commit or share it.
+Paste it directly into Vercel's `ADMIN_SECRET` variable. Do not commit or share it. The admin login screen uses this exact value.
 
-5. Deploy the Railway service and generate its public HTTPS domain. This is the backend URL.
+4. Remove any existing `VITE_API_BASE_URL` variable; the frontend calls the API on the same Vercel domain.
+5. Deploy or redeploy after setting the variables.
 
-### 2. Deploy the frontend to Vercel
+## 3. Verify
 
-1. Import the same GitHub repository into Vercel. Vercel reads `vercel.json` and builds the Vite frontend.
-2. In the Vercel project settings, add the environment variable `VITE_API_BASE_URL` with the Railway public URL, for example `https://your-service.up.railway.app` (no trailing slash).
-3. Deploy or redeploy the Vercel project so the frontend build includes that URL. `VITE_` variables are public; only put the backend URL there, never a secret.
-4. Copy the Vercel production domain, then add it in Railway as `CORS_ORIGINS`, for example `https://your-project.vercel.app`. For multiple allowed domains, use a comma-separated list of exact origins. Redeploy the Railway service after setting it.
-5. Open the Vercel site and check that the login screen loads and can reach the backend. The backend health endpoint is `https://your-service.up.railway.app/healthz`.
-
-For Vercel preview deployments, add the exact preview origin(s) you want to allow to `CORS_ORIGINS` in Railway and redeploy the backend.
+- Open `https://your-project.vercel.app/api/healthz`; it should return `{"ok":true}`.
+- Open the Vercel site and log in as Admin using the `ADMIN_SECRET` value.
+- The database state is initialized with demo data the first time the API is used.
 
 ## Operations
 
-Keep one Railway service replica: sessions are held in server memory, and SQLite is stored on a single mounted volume. Back up `/data/factory.db` regularly; a persistent volume is not a backup. Changing or losing `ADMIN_SECRET` prevents administrator login, so store it in a password manager.
+- Never put `SUPABASE_SERVICE_ROLE_KEY` or `ADMIN_SECRET` in a `VITE_` variable; Vite variables are exposed to browsers.
+- Supabase backups and plan limits depend on your Supabase plan. Back up important factory data regularly.
+- The application uses one JSON state row. Avoid running multiple app instances that write the same record simultaneously.
+- Supabase starts with demo data; the ignored local SQLite/database files are not uploaded or migrated automatically. Export and migrate any local records you need before using the deployed app.

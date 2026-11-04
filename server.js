@@ -1,28 +1,87 @@
 const express = require('express');
 const fs = require('fs');
 const crypto = require('crypto');
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, 'data');
-const DB_PATH = path.join(DATA_DIR, 'factory.db');
 const ADMIN_SECRET_PATH = path.join(DATA_DIR, 'admin.secret');
-const CLIENT_DIR = path.join(__dirname, 'dist');
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const PIN_HASH_ITERATIONS = 210000;
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const allowedOrigins = new Set(
   (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean)
 );
-fs.mkdirSync(DATA_DIR, { recursive: true });
-const db = new sqlite3.Database(DB_PATH);
-const sessions = new Map();
-const loginFailures = new Map();
-let adminSecret;
+const adminSecret = loadAdminSecret();
+
+async function supabaseRequest(tableOrRpc, { method = 'GET', query = '', body, prefer } = {}) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.');
+  }
+
+  const endpoint = `${SUPABASE_URL}/rest/v1/${tableOrRpc}`;
+  const headers = {
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    Accept: 'application/json',
+  };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (prefer) headers.Prefer = prefer;
+
+  const response = await fetch(`${endpoint}${query}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Supabase request failed (${response.status}): ${text.slice(0, 300)}`);
+  }
+  return text ? JSON.parse(text) : null;
+}
+
+async function readState() {
+  const rows = await supabaseRequest('app_state', { query: '?id=eq.1&select=payload' });
+  if (!Array.isArray(rows)) throw new Error('Supabase returned an invalid state response.');
+  if (rows[0]?.payload) return rows[0].payload;
+
+  const state = defaultState();
+  await writeState(state);
+  return state;
+}
+
+async function writeState(state) {
+  await supabaseRequest('app_state', {
+    method: 'POST',
+    query: '?on_conflict=id',
+    body: { id: 1, payload: state || defaultState() },
+    prefer: 'resolution=merge-duplicates,return=minimal',
+  });
+}
+
+async function saveLoginAttempt(ipHash, attempt) {
+  await supabaseRequest('login_attempts', {
+    method: 'POST',
+    query: '?on_conflict=ip_hash',
+    body: { ip_hash: ipHash, count: attempt.count, reset_at: new Date(attempt.resetAt).toISOString() },
+    prefer: 'resolution=merge-duplicates,return=minimal',
+  });
+}
+
+function requestIpHash(req) {
+  const forwardedFor = req.get('x-forwarded-for') || '';
+  const ip = (forwardedFor.split(',')[0].trim() || req.ip || 'unknown');
+  return crypto.createHash('sha256').update(ip).digest('hex');
+}
+
+function hashSessionToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 function generateWorkerPin() {
   return String(crypto.randomInt(0, 1000000)).padStart(6, '0');
@@ -106,58 +165,6 @@ const defaultState = () => ({
   session: null,
 });
 
-function initializeDatabase() {
-  return new Promise((resolve, reject) => {
-    db.serialize(() => {
-      db.run('CREATE TABLE IF NOT EXISTS app_state (id INTEGER PRIMARY KEY CHECK(id = 1), payload TEXT NOT NULL)', (err) => {
-        if (err) return reject(err);
-        db.get('SELECT payload FROM app_state WHERE id = 1', (err2, row) => {
-          if (err2) return reject(err2);
-          if (!row) {
-            db.run('INSERT INTO app_state (id, payload) VALUES (1, ?)', JSON.stringify(defaultState()), (err3) => {
-              if (err3) return reject(err3);
-              resolve();
-            });
-          } else {
-            resolve();
-          }
-        });
-      });
-    });
-  });
-}
-
-function readState() {
-  return new Promise((resolve, reject) => {
-    db.get('SELECT payload FROM app_state WHERE id = 1', (err, row) => {
-      if (err) return reject(err);
-      if (!row || !row.payload) {
-        resolve(defaultState());
-        return;
-      }
-      try {
-        resolve(JSON.parse(row.payload));
-      } catch (error) {
-        reject(new Error('Invalid state payload'));
-      }
-    });
-  });
-}
-
-function writeState(state) {
-  return new Promise((resolve, reject) => {
-    const payload = JSON.stringify(state || defaultState());
-    db.run(
-      'INSERT INTO app_state (id, payload) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload',
-      [payload],
-      (err) => {
-        if (err) return reject(err);
-        resolve();
-      }
-    );
-  });
-}
-
 function hashPin(pin) {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.pbkdf2Sync(pin, salt, PIN_HASH_ITERATIONS, 32, 'sha256').toString('hex');
@@ -202,17 +209,6 @@ function safeState(state, auth) {
   return result;
 }
 
-async function migrateWorkerPins() {
-  const state = await readState();
-  let changed = false;
-  state.workers = (state.workers || []).map((worker) => {
-    if (typeof worker.pin !== 'string' || worker.pin.startsWith('pbkdf2$')) return worker;
-    changed = true;
-    return { ...worker, pin: hashPin(worker.pin) };
-  });
-  if (changed) await writeState(state);
-}
-
 function loadAdminSecret() {
   if (process.env.ADMIN_SECRET) {
     if (process.env.ADMIN_SECRET.length < 16) {
@@ -221,10 +217,11 @@ function loadAdminSecret() {
     return process.env.ADMIN_SECRET;
   }
 
-  if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
-    throw new Error('ADMIN_SECRET must be configured in the production environment.');
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL || process.env.RAILWAY_ENVIRONMENT) {
+    throw new Error('ADMIN_SECRET must be configured in the deployment environment.');
   }
 
+  fs.mkdirSync(DATA_DIR, { recursive: true });
   if (fs.existsSync(ADMIN_SECRET_PATH)) {
     return fs.readFileSync(ADMIN_SECRET_PATH, 'utf8').trim();
   }
@@ -236,32 +233,48 @@ function loadAdminSecret() {
 }
 
 function loginRateLimit(req, res, next) {
-  const key = req.ip;
-  const now = Date.now();
-  let attempt = loginFailures.get(key);
-  if (!attempt || attempt.resetAt <= now) {
-    attempt = { count: 0, resetAt: now + 15 * 60 * 1000 };
-    loginFailures.set(key, attempt);
-  }
-  if (attempt.count >= 10) {
-    res.set('Retry-After', String(Math.ceil((attempt.resetAt - now) / 1000)));
-    return res.status(429).json({ error: 'Too many login attempts. Try again later.' });
-  }
-  req.loginAttempt = attempt;
-  next();
+  (async () => {
+    const ipHash = requestIpHash(req);
+    const rows = await supabaseRequest('login_attempts', { query: `?ip_hash=eq.${ipHash}&select=count,reset_at` });
+    const now = Date.now();
+    const saved = rows[0];
+    const attempt = saved && Date.parse(saved.reset_at) > now
+      ? { count: saved.count, resetAt: Date.parse(saved.reset_at) }
+      : { count: 0, resetAt: now + 15 * 60 * 1000 };
+    if (attempt.count >= 10) {
+      res.set('Retry-After', String(Math.ceil((attempt.resetAt - now) / 1000)));
+      return res.status(429).json({ error: 'Too many login attempts. Try again later.' });
+    }
+    req.loginAttempt = { ...attempt, ipHash };
+    next();
+  })().catch((error) => {
+    console.error('Login rate limit check failed:', error);
+    res.status(503).json({ error: 'Login is temporarily unavailable.' });
+  });
 }
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const authorization = req.get('authorization') || '';
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-  const session = sessions.get(token);
-  if (!session || session.expiresAt <= Date.now()) {
-    if (token) sessions.delete(token);
-    return res.status(401).json({ error: 'Authentication required.' });
+  if (!token) return res.status(401).json({ error: 'Authentication required.' });
+  try {
+    const rows = await supabaseRequest('auth_sessions', {
+      query: `?token_hash=eq.${hashSessionToken(token)}&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&select=role,worker_id,worker_name,expires_at`,
+    });
+    const session = rows[0];
+    if (!session) return res.status(401).json({ error: 'Authentication required.' });
+    req.auth = {
+      role: session.role,
+      workerId: session.worker_id,
+      workerName: session.worker_name,
+      expiresAt: Date.parse(session.expires_at),
+    };
+    req.authToken = token;
+    next();
+  } catch (error) {
+    console.error('Session lookup failed:', error);
+    res.status(503).json({ error: 'Authentication is temporarily unavailable.' });
   }
-  req.auth = session;
-  req.authToken = token;
-  next();
 }
 
 function requireAdmin(req, res, next) {
@@ -287,6 +300,7 @@ function mergeWorkerCredentials(incomingWorkers, currentWorkers) {
 
 app.use(express.json({ limit: '1mb' }));
 app.disable('x-powered-by');
+app.set('trust proxy', true);
 app.use((req, res, next) => {
   const origin = req.get('Origin');
   if (origin) {
@@ -307,13 +321,14 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) res.set('Cache-Control', 'no-store');
   next();
 });
-app.use(express.static(CLIENT_DIR));
 
-app.get('/healthz', (req, res) => {
-  db.get('SELECT 1 AS ok', (error) => {
-    if (error) return res.status(503).json({ ok: false });
-    res.json({ ok: true });
-  });
+app.get(['/healthz', '/api/healthz'], (req, res) => {
+  supabaseRequest('app_state', { query: '?select=id&limit=1' })
+    .then(() => res.json({ ok: true }))
+    .catch((error) => {
+      console.error('Health check failed:', error);
+      res.status(503).json({ ok: false });
+    });
 });
 
 app.get('/api/auth/workers', async (req, res) => {
@@ -326,32 +341,60 @@ app.get('/api/auth/workers', async (req, res) => {
 });
 
 app.post('/api/auth/login', loginRateLimit, async (req, res) => {
-  const { role, workerId, pin } = req.body || {};
-  let session;
-  if (role === 'admin' && verifyPin(pin, adminSecret)) {
-    session = { role: 'admin', workerId: null, workerName: 'Administrator' };
-  } else if (role === 'worker') {
-    const state = await readState();
-    const worker = (state.workers || []).find((item) => item.id === workerId);
-    if (worker && verifyPin(pin, worker.pin)) {
-      session = { role: 'worker', workerId: worker.id, workerName: worker.name };
+  try {
+    const { role, workerId, pin } = req.body || {};
+    let session;
+    if (role === 'admin' && verifyPin(pin, adminSecret)) {
+      session = { role: 'admin', workerId: null, workerName: 'Administrator' };
+    } else if (role === 'worker') {
+      const state = await readState();
+      const worker = (state.workers || []).find((item) => item.id === workerId);
+      if (worker && verifyPin(pin, worker.pin)) {
+        session = { role: 'worker', workerId: worker.id, workerName: worker.name };
+      }
     }
-  }
 
-  if (!session) {
-    req.loginAttempt.count += 1;
-    return res.status(401).json({ error: 'Invalid credentials.' });
-  }
+    if (!session) {
+      req.loginAttempt.count += 1;
+      await saveLoginAttempt(req.loginAttempt.ipHash, req.loginAttempt);
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
 
-  loginFailures.delete(req.ip);
-  const token = crypto.randomBytes(32).toString('base64url');
-  sessions.set(token, { ...session, expiresAt: Date.now() + SESSION_TTL_MS });
-  res.json({ token, session });
+    await supabaseRequest('login_attempts', {
+      method: 'DELETE',
+      query: `?ip_hash=eq.${req.loginAttempt.ipHash}`,
+    });
+    const token = crypto.randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+    await supabaseRequest('auth_sessions', {
+      method: 'POST',
+      body: {
+        token_hash: hashSessionToken(token),
+        role: session.role,
+        worker_id: session.workerId,
+        worker_name: session.workerName,
+        expires_at: expiresAt.toISOString(),
+      },
+      prefer: 'return=minimal',
+    });
+    res.json({ token, session: { ...session, expiresAt: expiresAt.getTime() } });
+  } catch (error) {
+    console.error('Login failed:', error);
+    res.status(503).json({ error: 'Login is temporarily unavailable.' });
+  }
 });
 
-app.post('/api/auth/logout', requireAuth, (req, res) => {
-  sessions.delete(req.authToken);
-  res.json({ ok: true });
+app.post('/api/auth/logout', requireAuth, async (req, res) => {
+  try {
+    await supabaseRequest('auth_sessions', {
+      method: 'DELETE',
+      query: `?token_hash=eq.${hashSessionToken(req.authToken)}`,
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Logout failed:', error);
+    res.status(503).json({ error: 'Unable to log out right now.' });
+  }
 });
 
 app.post('/api/workers/:workerId/reset-pin', requireAuth, requireAdmin, async (req, res) => {
@@ -485,22 +528,15 @@ app.get('/api/erp/export.csv', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(CLIENT_DIR, 'index.html'));
-});
+module.exports = app;
 
-initializeDatabase()
-  .then(() => {
-    adminSecret = loadAdminSecret();
-    return migrateWorkerPins();
-  })
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`VINPAC demo server running at http://localhost:${PORT}`);
-      console.log(`SQLite database: ${DB_PATH}`);
-    });
-  })
-  .catch((error) => {
-    console.error('Database initialization failed:', error);
-    process.exit(1);
+if (require.main === module) {
+  const clientDir = path.join(__dirname, 'dist');
+  app.use(express.static(clientDir));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientDir, 'index.html'));
   });
+  app.listen(PORT, () => {
+    console.log(`VINPAC API server running at http://localhost:${PORT}`);
+  });
+}
