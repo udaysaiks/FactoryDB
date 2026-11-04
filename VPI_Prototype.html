@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>VINPAC Innovations — Factory Platform Demo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #0B0D12; -webkit-tap-highlight-color: transparent; }
+  #root { min-height: 100vh; }
+  #loading { color: #9aa4b2; font-family: -apple-system, sans-serif; text-align: center; padding: 60px 20px; }
+</style>
+</head>
+<body>
+<div id="root"><div id="loading">Loading demo…</div></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef } = React;
+
+
+/* ============================================================
+   VINPAC INNOVATIONS — Factory Management Platform
+   Thermoforming & Vacuum Forming · Tray Manufacturing
+   ============================================================ */
+
+/* ---------- DESIGN TOKENS ---------- */
+const T = {
+  bg: "#0B0D12",
+  panel: "#14171F",
+  panel2: "#1A1E29",
+  panel3: "#21263380",
+  border: "#262C3A",
+  borderHi: "#363D52",
+  orange: "#D97757",
+  orangeDim: "#7A4332",
+  orangeBg: "#2A1A12",
+  orangeText: "#E8A487",
+  teal: "#14B8A6",
+  tealBg: "#0A2622",
+  tealText: "#5EEAD4",
+  red: "#EF4444",
+  redBg: "#2A1212",
+  redText: "#FCA5A5",
+  blue: "#3B82F6",
+  blueBg: "#0F1C36",
+  blueText: "#93C5FD",
+  violet: "#A78BFA",
+  violetBg: "#1D1730",
+  violetText: "#C4B5FD",
+  t1: "#F4F5F7",
+  t2: "#9499AC",
+  t3: "#565C70",
+};
+
+const FONT_HEAD = "'Space Grotesk', 'Inter', system-ui, sans-serif";
+const FONT_BODY = "'Inter', system-ui, sans-serif";
+const FONT_MONO = "'JetBrains Mono', 'SF Mono', monospace";
+
+/* ---------- SEED DATA ---------- */
+// NOTE: Worker names/PINs below are PLACEHOLDERS — I don't have real
+// staff records on file. Replace with actual names/PINs when ready.
+const seedWorkers = () => [
+  { id: "W-001", name: " Kumar", pin: "1001", role: "Operator", skill: ["production", "cutting"], status: "off-duty", machine: null, checkedInAt: null, todayDone: 0, todayGoal: 0, currentOrder: null, photo: "RK" },
+  { id: "W-002", name: "Suresh Patil", pin: "1002", role: "Operator", skill: ["production"], status: "off-duty", machine: null, checkedInAt: null, todayDone: 0, todayGoal: 0, currentOrder: null, photo: "SP" },
+  { id: "W-003", name: "Anita Devi", pin: "1003", role: "Operator", skill: ["production", "cutting"], status: "off-duty", machine: null, checkedInAt: null, todayDone: 0, todayGoal: 0, currentOrder: null, photo: "AD" },
+  { id: "W-004", name: "Priya Mehta", pin: "1004", role: "Operator", skill: ["production"], status: "off-duty", machine: null, checkedInAt: null, todayDone: 0, todayGoal: 0, currentOrder: null, photo: "PM" },
+  { id: "W-005", name: "Mohan Rao", pin: "1005", role: "Operator", skill: ["cutting"], status: "off-duty", machine: null, checkedInAt: null, todayDone: 0, todayGoal: 0, currentOrder: null, photo: "MR" },
+  { id: "W-006", name: "Kavya Sharma", pin: "1006", role: "Operator", skill: ["cutting"], status: "off-duty", machine: null, checkedInAt: null, todayDone: 0, todayGoal: 0, currentOrder: null, photo: "KS" },
+  { id: "W-007", name: "Vijay Nair", pin: "1007", role: "Operator", skill: ["cutting", "production"], status: "off-duty", machine: null, checkedInAt: null, todayDone: 0, todayGoal: 0, currentOrder: null, photo: "VN" },
+  { id: "W-008", name: "Deepa Singh", pin: "1008", role: "Operator", skill: ["production"], status: "off-duty", machine: null, checkedInAt: null, todayDone: 0, todayGoal: 0, currentOrder: null, photo: "DS" },
+];
+
+const seedMachines = () => [
+  { id: "TF-01", type: "production", label: "Thermoformer 1", status: "idle", worker: null, orderId: null, doneQty: 0, goalQty: 0, runStart: null, notes: "" },
+  { id: "TF-02", type: "production", label: "Thermoformer 2", status: "idle", worker: null, orderId: null, doneQty: 0, goalQty: 0, runStart: null, notes: "" },
+  { id: "TF-03", type: "production", label: "Thermoformer 3", status: "down", worker: null, orderId: null, doneQty: 0, goalQty: 0, runStart: null, notes: "Heating element fault" },
+  { id: "TF-04", type: "production", label: "Vacuum Former 1", status: "idle", worker: null, orderId: null, doneQty: 0, goalQty: 0, runStart: null, notes: "" },
+  { id: "TF-05", type: "production", label: "Vacuum Former 2", status: "idle", worker: null, orderId: null, doneQty: 0, goalQty: 0, runStart: null, notes: "" },
+  { id: "CT-01", type: "cutting", label: "Cutting Line 1", status: "idle", worker: null, orderId: null, doneQty: 0, goalQty: 0, runStart: null, notes: "" },
+  { id: "CT-02", type: "cutting", label: "Cutting Line 2", status: "idle", worker: null, orderId: null, doneQty: 0, goalQty: 0, runStart: null, notes: "" },
+  { id: "CT-03", type: "cutting", label: "Cutting Line 3", status: "idle", worker: null, orderId: null, doneQty: 0, goalQty: 0, runStart: null, notes: "" },
+];
+
+// NOTE: Client names, quantities, and dispatch dates below are PLACEHOLDERS.
+// "CUMA Bottom PET tray" and "Denso tray" are the only real product lines I
+// have on record for the plant — swap the client/qty/date fields for real
+// order-book data when you have it.
+const seedOrders = () => [
+  { id: "ORD-001", client: "Client A", product: "CUMA Bottom PET tray", qty: 8000, formedQty: 5200, cutQty: 4800, dispatch: "2026-07-01", priority: "high", status: "active" },
+  { id: "ORD-002", client: "Client B", product: "Denso tray", qty: 10000, formedQty: 4820, cutQty: 3900, dispatch: "2026-07-02", priority: "high", status: "active" },
+  { id: "ORD-003", client: "Client C", product: "CUMA Bottom PET tray", qty: 5000, formedQty: 3800, cutQty: 3100, dispatch: "2026-07-04", priority: "medium", status: "active" },
+  { id: "ORD-004", client: "Client D", product: "Denso tray", qty: 6400, formedQty: 6400, cutQty: 6400, dispatch: "2026-06-30", priority: "low", status: "completed" },
+  { id: "ORD-005", client: "Client E", product: "CUMA Bottom PET tray", qty: 12000, formedQty: 6000, cutQty: 4200, dispatch: "2026-07-06", priority: "medium", status: "active" },
+  { id: "ORD-006", client: "Client F", product: "Denso tray", qty: 4000, formedQty: 1200, cutQty: 800, dispatch: "2026-07-08", priority: "low", status: "active" },
+  { id: "ORD-007", client: "Client G", product: "CUMA Bottom PET tray", qty: 15000, formedQty: 5700, cutQty: 5100, dispatch: "2026-07-01", priority: "urgent", status: "active" },
+];
+
+const seedInventory = () => ({
+  raw: [
+    { id: "RM-1", material: "PET sheet", grade: "Food-grade", qty: 42, unit: "rolls", thickness: "0.3 mm", min: 15 },
+    { id: "RM-2", material: "HIPS sheet", grade: "Standard", qty: 18, unit: "rolls", thickness: "0.5 mm", min: 12 },
+    { id: "RM-3", material: "PP sheet", grade: "Food-grade", qty: 4, unit: "rolls", thickness: "0.4 mm", min: 10 },
+    { id: "RM-4", material: "PVC sheet", grade: "Standard", qty: 11, unit: "rolls", thickness: "0.6 mm", min: 10 },
+  ],
+  mould: [
+    { id: "M-001", trayType: "Denso tray", cavity: "6-cavity", assignedTo: "TF-01", condition: "good" },
+    { id: "M-002", trayType: "CUMA Bottom PET tray", cavity: "4-cavity", assignedTo: "TF-02", condition: "good" },
+    { id: "M-003", trayType: "Denso tray", cavity: "8-cavity", assignedTo: "TF-04", condition: "watch" },
+    { id: "M-004", trayType: "CUMA Bottom PET tray", cavity: "6-cavity", assignedTo: "TF-05", condition: "good" },
+    { id: "M-005", trayType: "Denso tray", cavity: "4-cavity", assignedTo: "Storage", condition: "stored" },
+  ],
+  pack: [
+    { id: "PK-1", item: "Cardboard boxes (large)", unit: "pcs", qty: 820, usedToday: 96, min: 200 },
+    { id: "PK-2", item: "Cardboard boxes (small)", unit: "pcs", qty: 340, usedToday: 48, min: 150 },
+    { id: "PK-3", item: "Stretch wrap rolls", unit: "rolls", qty: 12, usedToday: 2, min: 8 },
+    { id: "PK-4", item: "Adhesive tape", unit: "rolls", qty: 6, usedToday: 4, min: 8 },
+    { id: "PK-5", item: "Labels / stickers", unit: "sheets", qty: 1200, usedToday: 144, min: 300 },
+  ],
+});
+
+// NOTE: The setpoints below are PLACEHOLDERS to show how the feature works —
+// I don't have your actual SOP / spec-sheet values on file. Replace each
+// zone temp, vacuum time, cycle time etc. with the real settings from your
+// process sheets before relying on this on the floor.
+const trayParams = {
+  "CUMA Bottom PET tray": {
+    production: [
+      { label: "Zone 1 temp (feed)", value: "185°C", icon: "🌡️" },
+      { label: "Zone 2 temp", value: "195°C", icon: "🌡️" },
+      { label: "Zone 3 temp", value: "205°C", icon: "🌡️" },
+      { label: "Zone 4 temp (forming)", value: "210°C", icon: "🌡️" },
+      { label: "Sheet surface temp", value: "195–205°C", icon: "📏" },
+      { label: "Vacuum time", value: "3.2 sec", icon: "💨" },
+      { label: "Forming air pressure", value: "0.6 MPa", icon: "🧭" },
+      { label: "Mould temp", value: "35–40°C", icon: "🧊" },
+      { label: "Cooling time", value: "8 sec", icon: "❄️" },
+      { label: "Cycle time", value: "14 sec", icon: "🔁" },
+    ],
+    cutting: [
+      { label: "Blade speed", value: "45 strokes/min", icon: "⚙️" },
+      { label: "Cutting pressure", value: "1.2 MPa", icon: "🔧" },
+      { label: "Index length", value: "310 mm", icon: "📏" },
+      { label: "Blade gap", value: "0.15 mm", icon: "🗡️" },
+    ],
+  },
+  "Denso tray": {
+    production: [
+      { label: "Zone 1 temp (feed)", value: "175°C", icon: "🌡️" },
+      { label: "Zone 2 temp", value: "185°C", icon: "🌡️" },
+      { label: "Zone 3 temp", value: "195°C", icon: "🌡️" },
+      { label: "Zone 4 temp (forming)", value: "200°C", icon: "🌡️" },
+      { label: "Sheet surface temp", value: "185–195°C", icon: "📏" },
+      { label: "Vacuum time", value: "2.8 sec", icon: "💨" },
+      { label: "Forming air pressure", value: "0.55 MPa", icon: "🧭" },
+      { label: "Mould temp", value: "30–35°C", icon: "🧊" },
+      { label: "Cooling time", value: "7 sec", icon: "❄️" },
+      { label: "Cycle time", value: "12 sec", icon: "🔁" },
+    ],
+    cutting: [
+      { label: "Blade speed", value: "50 strokes/min", icon: "⚙️" },
+      { label: "Cutting pressure", value: "1.0 MPa", icon: "🔧" },
+      { label: "Index length", value: "280 mm", icon: "📏" },
+      { label: "Blade gap", value: "0.12 mm", icon: "🗡️" },
+    ],
+  },
+};
+
+const STORAGE_KEY = "vinpac_factory_demo_v1";
+const defaultFactoryState = () => ({
+  workers: seedWorkers(),
+  machines: seedMachines(),
+  orders: seedOrders(),
+  inventory: seedInventory(),
+  scanLog: [],
+  session: null,
+});
+
+const loadSavedState = async () => {
+  try {
+    const res = await fetch('/api/state');
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn('Could not read server data:', err);
+    return null;
+  }
+};
+const saveState = async (state) => {
+  try {
+    await fetch('/api/state', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state),
+    });
+  } catch (err) {
+    console.warn('Could not save server data:', err);
+  }
+};
+const normalizeImportedState = (incoming) => {
+  const fresh = {
+    workers: incoming?.workers || seedWorkers(),
+    machines: incoming?.machines || seedMachines(),
+    orders: incoming?.orders || seedOrders(),
+    inventory: incoming?.inventory || seedInventory(),
+    scanLog: Array.isArray(incoming?.scanLog) ? incoming.scanLog : [],
+    session: incoming?.session || null,
+  };
+  return fresh;
+};
+
+const uid = (p) => `${p}-${Math.random().toString(36).slice(2, 7)}`;
+const fmt = (n) => (n ?? 0).toLocaleString("en-IN");
+const pct = (a, b) => (b > 0 ? Math.min(100, Math.round((a / b) * 100)) : 0);
+const todayStr = () => new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
+const timeStr = () => new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+
+const priorityMeta = {
+  urgent: { label: "Urgent", bg: T.redBg, fg: T.redText, dot: T.red },
+  high: { label: "High", bg: T.orangeBg, fg: T.orangeText, dot: T.orange },
+  medium: { label: "Medium", bg: "#2A2410", fg: "#FDE68A", dot: "#EAB308" },
+  low: { label: "Low", bg: T.blueBg, fg: T.blueText, dot: T.blue },
+};
+
+/* ============================================================
+   SMALL UI PRIMITIVES
+   ============================================================ */
+const Badge = ({ children, bg, fg, dot, style }) => (
+  <span style={{
+    display: "inline-flex", alignItems: "center", gap: 5,
+    fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20,
+    background: bg, color: fg, border: `1px solid ${fg}33`, whiteSpace: "nowrap",
+    ...style,
+  }}>
+    {dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, flexShrink: 0 }} />}
+    {children}
+  </span>
+);
+
+const Bar = ({ value, color = T.orange, h = 6, bg = T.panel3 }) => (
+  <div style={{ height: h, background: bg, borderRadius: 99, overflow: "hidden" }}>
+    <div style={{ width: `${value}%`, height: "100%", background: color, borderRadius: 99, transition: "width .5s ease" }} />
+  </div>
+);
+
+const Card = ({ children, style, ...rest }) => (
+  <div style={{ background: T.panel2, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px", ...style }} {...rest}>
+    {children}
+  </div>
+);
+
+const CardSm = ({ children, style }) => (
+  <div style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px", ...style }}>
+    {children}
+  </div>
+);
+
+const CardHd = ({ icon, title, right }) => (
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, fontWeight: 700, color: T.t1, fontFamily: FONT_HEAD, letterSpacing: 0.2 }}>
+      <span style={{ color: T.t3 }}>{icon}</span>{title}
+    </div>
+    {right}
+  </div>
+);
+
+const Btn = ({ children, primary, danger, success, small, style, ...rest }) => {
+  const base = {
+    padding: small ? "6px 12px" : "9px 16px",
+    borderRadius: 8, fontSize: small ? 12 : 13, fontWeight: 600,
+    display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer",
+    fontFamily: FONT_BODY, transition: "all .15s", border: "1px solid",
+  };
+  let theme = { background: T.panel3, color: T.t1, borderColor: T.borderHi };
+  if (primary) theme = { background: T.orangeBg, color: T.orangeText, borderColor: "#5a280f" };
+  if (danger) theme = { background: T.redBg, color: T.redText, borderColor: "#4a1a1a" };
+  if (success) theme = { background: T.tealBg, color: T.tealText, borderColor: "#0d3a35" };
+  return <button style={{ ...base, ...theme, ...style }} {...rest}>{children}</button>;
+};
+
+const Avatar = ({ initials, size = 36, status, color }) => {
+  const palette = color || ["#FF5A1F", "#14B8A6", "#3B82F6", "#A78BFA", "#EAB308", "#EC4899"][Math.abs(hashCode(initials)) % 6];
+  return (
+    <div style={{ position: "relative", flexShrink: 0 }}>
+      <div style={{
+        width: size, height: size, borderRadius: "50%",
+        background: palette + "26", color: palette,
+        border: `1px solid ${palette}55`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontWeight: 700, fontSize: size * 0.36, fontFamily: FONT_HEAD,
+      }}>{initials}</div>
+      {status && (
+        <span style={{
+          position: "absolute", bottom: -1, right: -1, width: size * 0.32, height: size * 0.32,
+          borderRadius: "50%", border: `2px solid ${T.panel2}`,
+          background: status === "active" ? T.teal : status === "break" ? "#EAB308" : T.t3,
+        }} />
+      )}
+    </div>
+  );
+};
+function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h << 5) - h + s.charCodeAt(i); return h; }
+
+const Input = (props) => (
+  <input {...props} style={{
+    background: T.panel, border: `1px solid ${T.border}`, borderRadius: 8,
+    padding: "9px 12px", color: T.t1, fontSize: 13, outline: "none", width: "100%",
+    fontFamily: FONT_BODY, ...props.style,
+  }} />
+);
+const Select = (props) => (
+  <select {...props} style={{
+    background: T.panel, border: `1px solid ${T.border}`, borderRadius: 8,
+    padding: "9px 12px", color: T.t1, fontSize: 13, outline: "none", width: "100%",
+    fontFamily: FONT_BODY, ...props.style,
+  }}>{props.children}</select>
+);
+const Label = ({ children }) => (
+  <div style={{ fontSize: 11, fontWeight: 600, color: T.t3, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 }}>{children}</div>
+);
+
+const Toast = ({ toast }) => {
+  if (!toast) return null;
+  const colors = { success: [T.tealBg, T.tealText, "#0d3a35"], error: [T.redBg, T.redText, "#4a1a1a"], info: [T.blueBg, T.blueText, "#1a2e5a"] };
+  const [bg, fg, bd] = colors[toast.type] || colors.info;
+  return (
+    <div style={{
+      position: "fixed", top: 18, left: "50%", transform: "translateX(-50%)",
+      background: bg, color: fg, border: `1px solid ${bd}`,
+      padding: "10px 18px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+      zIndex: 1000, boxShadow: "0 8px 30px #0008", maxWidth: 420, textAlign: "center",
+    }}>{toast.msg}</div>
+  );
+};
+
+const Modal = ({ open, onClose, title, children, width = 420 }) => {
+  if (!open) return null;
+  return (
+    <div onClick={(e) => e.target === e.currentTarget && onClose()} style={{
+      position: "fixed", inset: 0, background: "#000000a8", zIndex: 900,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+    }}>
+      <div style={{
+        background: T.panel2, border: `1px solid ${T.borderHi}`, borderRadius: 16,
+        padding: 24, width, maxWidth: "94vw", maxHeight: "88vh", overflowY: "auto",
+        boxShadow: "0 24px 70px #000a",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: T.t1, fontFamily: FONT_HEAD }}>{title}</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: T.t3, fontSize: 18, cursor: "pointer" }}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const QRTile = ({ label, sub, onClick, size = "md", color = T.orange }) => (
+  <div onClick={onClick} style={{
+    border: `1.5px dashed ${T.borderHi}`, borderRadius: 12,
+    padding: size === "lg" ? "26px 18px" : "14px 10px",
+    textAlign: "center", cursor: "pointer", transition: "all .15s",
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 7,
+    background: T.panel,
+  }}
+    onMouseEnter={(e) => { e.currentTarget.style.borderColor = color; e.currentTarget.style.background = T.panel3; }}
+    onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.borderHi; e.currentTarget.style.background = T.panel; }}
+  >
+    <QRGlyph size={size === "lg" ? 56 : 30} />
+    <div style={{ fontSize: size === "lg" ? 14 : 12, fontWeight: 700, color: T.t1, fontFamily: FONT_HEAD }}>{label}</div>
+    {sub && <div style={{ fontSize: 11, color: T.t3 }}>{sub}</div>}
+  </div>
+);
+
+const QRGlyph = ({ size = 40 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" style={{ flexShrink: 0 }}>
+    <rect width="100" height="100" rx="8" fill="#fff" />
+    {[[8,8],[8,40],[8,72],[40,8],[40,40],[40,72],[72,8],[72,40],[72,72]].map(([x,y],i)=>{
+      const big = i===0||i===2||i===6;
+      return big ? (
+        <g key={i}>
+          <rect x={x} y={y} width="20" height="20" fill="#111" />
+          <rect x={x+5} y={y+5} width="10" height="10" fill="#fff" />
+        </g>
+      ) : <rect key={i} x={x+4} y={y+4} width="12" height="12" fill="#111" />;
+    })}
+  </svg>
+);
+
+/* ============================================================
+   LOGO
+   ============================================================ */
+const Logo = ({ size = 34 }) => (
+  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <svg width={size} height={size} viewBox="0 0 48 48">
+      <polygon points="24,2 44,13 44,35 24,46 4,35 4,13" fill={T.orange} />
+      <polygon points="24,8 38,16 38,32 24,40 10,32 10,16" fill={T.bg} />
+      <text x="24" y="29" textAnchor="middle" fontFamily={FONT_HEAD} fontWeight="700" fontSize="15" fill={T.orange}>VP</text>
+    </svg>
+    <div>
+      <div style={{ fontFamily: FONT_HEAD, fontWeight: 700, fontSize: 15, color: T.t1, letterSpacing: 0.3, lineHeight: 1.1 }}>VINPAC INNOVATIONS</div>
+      <div style={{ fontSize: 10, color: T.t3, letterSpacing: 0.6, fontWeight: 500 }}>FACTORY OPERATIONS PLATFORM</div>
+    </div>
+  </div>
+);
+
+/* ============================================================
+   APP ROOT
+   ============================================================ */
+function App() {
+  const [workers, setWorkers] = useState(seedWorkers());
+  const [machines, setMachines] = useState(seedMachines());
+  const [orders, setOrders] = useState(seedOrders());
+  const [inventory, setInventory] = useState(seedInventory());
+  const [scanLog, setScanLog] = useState([]);
+  const [toast, setToast] = useState(null);
+  const [session, setSession] = useState(null); // { role: 'worker'|'admin', workerId? }
+  const [clock, setClock] = useState(timeStr());
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    loadSavedState().then((saved) => {
+      if (!mounted) return;
+      const next = saved || defaultFactoryState();
+      setWorkers(next.workers || seedWorkers());
+      setMachines(next.machines || seedMachines());
+      setOrders(next.orders || seedOrders());
+      setInventory(next.inventory || seedInventory());
+      setScanLog(Array.isArray(next.scanLog) ? next.scanLog : []);
+      setSession(next.session || null);
+      setIsHydrated(true);
+    }).catch(() => {
+      if (mounted) setIsHydrated(true);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    saveState({ workers, machines, orders, inventory, scanLog, session });
+  }, [workers, machines, orders, inventory, scanLog, session, isHydrated]);
+
+  useEffect(() => {
+    const t = setInterval(() => setClock(timeStr()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const resetFactoryData = async () => {
+    const fresh = defaultFactoryState();
+    setWorkers(fresh.workers);
+    setMachines(fresh.machines);
+    setOrders(fresh.orders);
+    setInventory(fresh.inventory);
+    setScanLog(fresh.scanLog);
+    setSession(fresh.session);
+    await saveState(fresh);
+    showToast("Demo data reset to default values.", "info");
+  };
+
+  const exportFactoryData = () => {
+    const payload = { workers, machines, orders, inventory, scanLog, session };
+    const json = JSON.stringify(payload, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "vinpac_factory_demo.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast("Factory data exported as JSON.", "success");
+  };
+
+  const importFactoryData = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        const next = normalizeImportedState(parsed);
+        setWorkers(next.workers);
+        setMachines(next.machines);
+        setOrders(next.orders);
+        setInventory(next.inventory);
+        setScanLog(next.scanLog);
+        setSession(next.session);
+        saveState(next);
+        showToast("Factory data imported successfully.", "success");
+      } catch (err) {
+        console.error("Import failed:", err);
+        showToast("Import failed. Please use a valid JSON export.", "error");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const showToast = (msg, type = "info") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3200);
+  };
+
+  const addLog = (entry) => {
+    setScanLog((prev) => [{ time: timeStr(), ...entry }, ...prev].slice(0, 60));
+  };
+
+  /* ---------- AUTO WORK ASSIGNMENT ---------- */
+  const findOrderForType = (type) => {
+    // Sort active orders by dispatch date (earliest first), pick one not yet complete for this stage
+    const field = type === "production" ? "formedQty" : "cutQty";
+    const candidates = orders
+      .filter((o) => o.status === "active" && o[field] < o.qty)
+      .sort((a, b) => new Date(a.dispatch) - new Date(b.dispatch));
+    return candidates[0] || null;
+  };
+
+  const assignWorkerToMachine = (worker) => {
+    // pick an idle machine matching worker's skill, prefer production then cutting based on what's idle & needed
+    const eligible = machines.filter((m) => m.status === "idle" && worker.skill.includes(m.type));
+    if (eligible.length === 0) return null;
+    // prefer the type with an order most urgently needing it
+    const machine = eligible[0];
+    const order = findOrderForType(machine.type);
+    if (!order) return null;
+    const goal = Math.min(400, order.qty - (machine.type === "production" ? order.formedQty : order.cutQty));
+    return { machine, order, goal: Math.max(50, goal) };
+  };
+
+  /* ============================================================
+     LOGIN GATE
+     ============================================================ */
+  if (!session) {
+    return (
+      <LoginScreen
+        workers={workers}
+        onWorkerLogin={(w) => setSession({ role: "worker", workerId: w.id })}
+        onAdminLogin={() => setSession({ role: "admin" })}
+      />
+    );
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: T.bg, fontFamily: FONT_BODY, color: T.t1 }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap');
+        * { box-sizing: border-box; }
+        ::selection { background: ${T.orangeDim}; }
+        table { border-collapse: collapse; width: 100%; font-size: 13px; }
+        th { text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 700; color: ${T.t3}; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid ${T.border}; background: ${T.panel}; }
+        td { padding: 10px 12px; border-bottom: 1px solid ${T.border}; color: ${T.t1}; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: ${T.panel3}; }
+      `}</style>
+      <Toast toast={toast} />
+      <TopBar
+        session={session}
+        workers={workers}
+        clock={clock}
+        onLogout={() => setSession(null)}
+        onExport={exportFactoryData}
+        onReset={resetFactoryData}
+        onImport={importFactoryData}
+      />
+      {session.role === "admin" ? (
+        <AdminApp {...{ workers, setWorkers, machines, setMachines, orders, setOrders, inventory, setInventory, scanLog, addLog, showToast }} />
+      ) : (
+        <WorkerApp
+          worker={workers.find((w) => w.id === session.workerId)}
+          {...{ workers, setWorkers, machines, setMachines, orders, setOrders, scanLog, addLog, showToast, assignWorkerToMachine }}
+          onLogout={() => setSession(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   TOP BAR
+   ============================================================ */
+const TopBar = ({ session, workers, clock, onLogout, onExport, onReset, onImport }) => {
+  const worker = session.role === "worker" ? workers.find((w) => w.id === session.workerId) : null;
+  const fileInputRef = useRef(null);
+
+  return (
+    <div style={{
+      background: T.panel, borderBottom: `1px solid ${T.border}`, height: 58,
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "0 22px", position: "sticky", top: 0, zIndex: 80,
+    }}>
+      <Logo size={30} />
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.t3, fontFamily: FONT_MONO }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.teal, animation: "pulse 2s infinite" }} />
+          {clock}
+        </div>
+        {worker && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Avatar initials={worker.photo} size={28} status={worker.status} />
+            <div style={{ fontSize: 12, fontWeight: 600 }}>{worker.name}</div>
+          </div>
+        )}
+        {session.role === "admin" && <Badge bg={T.orangeBg} fg={T.orangeText} dot={T.orange}>Admin</Badge>}
+        {session.role === "admin" && (
+          <>
+            <Btn small onClick={onExport}>Export</Btn>
+            <Btn small onClick={() => fileInputRef.current?.click()}>Import</Btn>
+            <Btn small danger onClick={onReset}>Reset</Btn>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onImport(file);
+                e.target.value = "";
+              }}
+            />
+          </>
+        )}
+        <Btn small onClick={onLogout}>Switch user</Btn>
+      </div>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
+    </div>
+  );
+};
+
+/* ============================================================
+   LOGIN SCREEN
+   ============================================================ */
+const LoginScreen = ({ workers, onWorkerLogin, onAdminLogin }) => {
+  const [mode, setMode] = useState("worker"); // worker | admin
+  const [pin, setPin] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [adminPin, setAdminPin] = useState("");
+  const [err, setErr] = useState("");
+
+  const tryWorkerLogin = () => {
+    const w = workers.find((x) => x.id === selected);
+    if (w && w.pin === pin) { setErr(""); onWorkerLogin(w); }
+    else setErr("Incorrect PIN. Try again.");
+  };
+  const tryAdminLogin = () => {
+    if (adminPin === "9999") onAdminLogin();
+    else setErr("Incorrect admin PIN. (Hint: 9999)");
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center",
+      fontFamily: FONT_BODY, padding: 20,
+    }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap');`}</style>
+      <div style={{ width: 420, maxWidth: "100%" }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 30 }}>
+          <Logo size={46} />
+        </div>
+
+        <div style={{
+          background: T.panel2, border: `1px solid ${T.border}`, borderRadius: 18,
+          padding: 28, boxShadow: "0 30px 80px #0009",
+        }}>
+          <div style={{ display: "flex", gap: 4, background: T.panel, padding: 4, borderRadius: 10, marginBottom: 22 }}>
+            {["worker", "admin"].map((m) => (
+              <button key={m} onClick={() => { setMode(m); setErr(""); setSelected(null); setPin(""); }} style={{
+                flex: 1, padding: "9px 0", borderRadius: 7, border: "none", cursor: "pointer",
+                background: mode === m ? T.orangeBg : "transparent",
+                color: mode === m ? T.orangeText : T.t3, fontWeight: 700, fontSize: 13,
+                fontFamily: FONT_HEAD, transition: "all .15s",
+              }}>{m === "worker" ? "Worker Login" : "Admin Login"}</button>
+            ))}
+          </div>
+
+          {mode === "worker" ? (
+            <>
+              <Label>Select your name</Label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18, maxHeight: 220, overflowY: "auto" }}>
+                {workers.map((w) => (
+                  <div key={w.id} onClick={() => setSelected(w.id)} style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "8px 10px",
+                    borderRadius: 9, cursor: "pointer", border: `1px solid ${selected === w.id ? T.orange : T.border}`,
+                    background: selected === w.id ? T.orangeBg : T.panel,
+                  }}>
+                    <Avatar initials={w.photo} size={26} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.name}</div>
+                      <div style={{ fontSize: 10, color: T.t3 }}>{w.id}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {selected && (
+                <>
+                  <Label>Enter your 4-digit PIN</Label>
+                  <Input type="password" maxLength={4} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                    placeholder="••••" style={{ textAlign: "center", letterSpacing: 6, fontSize: 18, marginBottom: 6 }}
+                    onKeyDown={(e) => e.key === "Enter" && tryWorkerLogin()} />
+                  <div style={{ fontSize: 11, color: T.t3, marginBottom: 14 }}>Demo PIN for all workers: <b style={{ color: T.t2 }}>100{workers.findIndex(w=>w.id===selected)+1}</b></div>
+                </>
+              )}
+              {err && <div style={{ color: T.redText, fontSize: 12, marginBottom: 12 }}>{err}</div>}
+              <Btn primary style={{ width: "100%", justifyContent: "center" }} disabled={!selected || pin.length < 4} onClick={tryWorkerLogin}>
+                Continue →
+              </Btn>
+            </>
+          ) : (
+            <>
+              <Label>Admin PIN</Label>
+              <Input type="password" maxLength={4} value={adminPin} onChange={(e) => setAdminPin(e.target.value.replace(/\D/g, ""))}
+                placeholder="••••" style={{ textAlign: "center", letterSpacing: 6, fontSize: 18, marginBottom: 6 }}
+                onKeyDown={(e) => e.key === "Enter" && tryAdminLogin()} />
+              <div style={{ fontSize: 11, color: T.t3, marginBottom: 14 }}>Demo PIN: <b style={{ color: T.t2 }}>9999</b></div>
+              {err && <div style={{ color: T.redText, fontSize: 12, marginBottom: 12 }}>{err}</div>}
+              <Btn primary style={{ width: "100%", justifyContent: "center" }} onClick={tryAdminLogin}>
+                Enter Dashboard →
+              </Btn>
+            </>
+          )}
+        </div>
+        <div style={{ textAlign: "center", fontSize: 11, color: T.t3, marginTop: 18 }}>
+          {todayStr()} · Factory floor terminal
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ============================================================
+   WORKER APP
+   ============================================================ */
+const WorkerApp = ({ worker, workers, setWorkers, machines, setMachines, orders, setOrders, scanLog, addLog, showToast, assignWorkerToMachine, onLogout }) => {
+  const [phase, setPhase] = useState(worker.status === "off-duty" ? "gate" : worker.status === "break" ? "break" : worker.machine ? "working" : "assigning");
+  const [selfieStep, setSelfieStep] = useState(false);
+  const [logQty, setLogQty] = useState("");
+  const [setupChecks, setSetupChecks] = useState({});
+  const [cameraError, setCameraError] = useState("");
+  const [cameraLocation, setCameraLocation] = useState(null);
+  const videoRef = useRef(null);
+  const cameraStreamRef = useRef(null);
+
+  const myMachine = machines.find((m) => m.id === worker.machine);
+  const myOrder = orders.find((o) => o.id === worker.currentOrder);
+  const paramSet = myOrder && myMachine ? (trayParams[myOrder.product]?.[myMachine.type] || []) : [];
+  const allChecked = paramSet.length > 0 && paramSet.every((_, i) => setupChecks[i]);
+
+  const updateWorker = (patch) => setWorkers((prev) => prev.map((w) => (w.id === worker.id ? { ...w, ...patch } : w)));
+  const updateMachine = (id, patch) => setMachines((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  const updateOrder = (id, patch) => setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+
+  const stopCamera = () => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  const getLocationMeta = () => new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = position.coords;
+        resolve({
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          accuracy: coords.accuracy,
+          altitude: coords.altitude,
+          timestamp: new Date(position.timestamp).toISOString(),
+        });
+      },
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+    );
+  });
+
+  const captureSelfie = () => {
+    const video = videoRef.current;
+    if (!video) return null;
+    const canvas = document.createElement("canvas");
+    const width = video.videoWidth || 640;
+    const height = video.videoHeight || 480;
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", 0.9);
+  };
+
+  useEffect(() => {
+    if (!selfieStep) {
+      stopCamera();
+      setCameraError("");
+      setCameraLocation(null);
+      return;
+    }
+
+    let active = true;
+    const startCamera = async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCameraError("This browser does not support camera capture.");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+        if (!active) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        cameraStreamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+        const location = await getLocationMeta();
+        if (active) setCameraLocation(location);
+      } catch (err) {
+        if (active) setCameraError("Camera access was blocked. Please allow access to continue.");
+      }
+    };
+
+    startCamera();
+    return () => {
+      active = false;
+      stopCamera();
+    };
+  }, [selfieStep]);
+
+  const handleGateScan = () => {
+    setCameraLocation(null);
+    setCameraError("");
+    setSelfieStep(true);
+  };
+
+  const handleSelfieConfirm = async () => {
+    const photoDataUrl = captureSelfie();
+    const location = await getLocationMeta();
+    const locationLabel = location ? `Lat ${location.latitude.toFixed(5)}, Lng ${location.longitude.toFixed(5)}` : "Location unavailable";
+
+    setCameraLocation(location);
+    setSelfieStep(false);
+    stopCamera();
+
+    if (photoDataUrl) {
+      updateWorker({
+        status: "idle",
+        checkedInAt: timeStr(),
+        photoDataUrl,
+        lastLocation: location,
+      });
+    } else {
+      updateWorker({ status: "idle", checkedInAt: timeStr() });
+    }
+
+    addLog({
+      worker: worker.name,
+      event: "Gate scan — check in",
+      type: "in",
+      location,
+      locationLabel,
+      photoDataUrl,
+    });
+
+    showToast(`Welcome in, ${worker.name.split(" ")[0]}! Finding your assignment…`, "success");
+    setPhase("assigning");
+  };
+
+  const handleFindWork = () => {
+    const assignment = assignWorkerToMachine({ ...worker, status: "idle" });
+    if (!assignment) {
+      showToast("No matching machine free right now. Check back shortly.", "error");
+      return;
+    }
+    const { machine, order, goal } = assignment;
+    updateMachine(machine.id, { status: "pending", worker: worker.id, orderId: order.id, doneQty: 0, goalQty: goal });
+    updateWorker({ machine: machine.id, currentOrder: order.id, todayGoal: goal, todayDone: 0 });
+    setPhase("toMachine");
+  };
+
+  const handleMachineScan = () => {
+    addLog({ worker: worker.name, event: `Machine ${myMachine.id} scan — loading setup for ${myOrder?.product || "job"}`, type: "machine" });
+    setSetupChecks({});
+    setPhase("setup");
+  };
+
+  const handleConfirmSetup = () => {
+    updateMachine(myMachine.id, { status: "running", runStart: timeStr() });
+    updateWorker({ status: "active" });
+    addLog({ worker: worker.name, event: `Machine ${myMachine.id} setup confirmed — production started`, type: "machine" });
+    showToast(`${myMachine.label} started. Goal: ${fmt(myMachine.goalQty)} trays.`, "success");
+    setPhase("working");
+  };
+
+  const handleLogBatch = () => {
+    const qty = parseInt(logQty);
+    if (!qty || qty <= 0) return;
+    const newDone = Math.min(myMachine.goalQty, myMachine.doneQty + qty);
+    updateMachine(myMachine.id, { doneQty: newDone });
+    updateWorker({ todayDone: newDone });
+    const field = myMachine.type === "production" ? "formedQty" : "cutQty";
+    updateOrder(myOrder.id, { [field]: Math.min(myOrder.qty, myOrder[field] + qty) });
+    setLogQty("");
+    showToast(`Logged ${fmt(qty)} trays.`, "success");
+    if (newDone >= myMachine.goalQty) showToast("🎯 Goal reached! Notify admin or take a break.", "info");
+  };
+
+  const handleGoalAchieved = () => {
+    addLog({ worker: worker.name, event: `Goal achieved on ${myMachine.id} — ${fmt(myMachine.doneQty)} trays`, type: "goal" });
+    updateMachine(myMachine.id, { status: "idle", worker: null, orderId: null, doneQty: 0, goalQty: 0, runStart: null });
+    updateWorker({ machine: null, currentOrder: null, status: "idle", todayGoal: 0, todayDone: 0 });
+    showToast("Nice work! Admin notified — find your next assignment.", "success");
+    setPhase("assigning");
+  };
+
+  const handleBreak = () => {
+    addLog({ worker: worker.name, event: "Gate scan — lunch break", type: "out" });
+    if (myMachine) updateMachine(myMachine.id, { status: "idle", worker: null, orderId: null });
+    updateWorker({ status: "break", machine: null, currentOrder: null });
+    setPhase("break");
+  };
+
+  const handleResume = () => {
+    addLog({ worker: worker.name, event: "Gate scan — back from break", type: "in" });
+    updateWorker({ status: "idle" });
+    setPhase("assigning");
+  };
+
+  const handleEndShift = () => {
+    addLog({ worker: worker.name, event: "Gate scan — shift end", type: "out" });
+    if (myMachine) updateMachine(myMachine.id, { status: "idle", worker: null, orderId: null, doneQty: 0, goalQty: 0 });
+    updateWorker({ status: "off-duty", machine: null, currentOrder: null, todayGoal: 0, checkedInAt: null });
+    showToast("Shift ended. See you tomorrow!", "info");
+    setPhase("gate");
+  };
+
+  /* ---------- PHONE SHELL ---------- */
+  return (
+    <div style={{ maxWidth: 480, margin: "0 auto", padding: "28px 16px 60px" }}>
+      <div style={{ background: T.panel2, border: `1px solid ${T.border}`, borderRadius: 28, padding: 12, boxShadow: "0 30px 80px #0009" }}>
+        <div style={{ background: T.panel, borderRadius: 20, padding: "20px 18px", minHeight: 540, position: "relative" }}>
+
+          {/* Selfie overlay */}
+          {selfieStep && (
+            <div style={{ position: "absolute", inset: 0, background: T.panel, borderRadius: 20, zIndex: 5, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>
+              <div style={{ width: "100%", maxWidth: 260, marginBottom: 14, borderRadius: 16, overflow: "hidden", border: `2px solid ${T.borderHi}`, background: "#000" }}>
+                <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: 200, objectFit: "cover", display: "block", background: "#000" }} />
+              </div>
+              {cameraError ? (
+                <div style={{ fontSize: 12, color: T.redText, marginBottom: 12, lineHeight: 1.5 }}>{cameraError}</div>
+              ) : (
+                <div style={{ fontSize: 11, color: T.t3, fontFamily: FONT_MONO, marginBottom: 12 }}>
+                  {cameraLocation ? `📍 Location captured: ${cameraLocation.latitude.toFixed(5)}, ${cameraLocation.longitude.toFixed(5)}` : "📍 Requesting live location…"}
+                </div>
+              )}
+              <div style={{ fontFamily: FONT_HEAD, fontWeight: 700, fontSize: 17, marginBottom: 4 }}>Attendance selfie</div>
+              <div style={{ fontSize: 12, color: T.t3, marginBottom: 6 }}>📍 VINPAC Innovations — Factory Premises</div>
+              <div style={{ fontSize: 11, color: T.t3, fontFamily: FONT_MONO, marginBottom: 20 }}>{timeStr()} · GPS verified</div>
+              <Btn primary style={{ width: "100%", justifyContent: "center" }} onClick={handleSelfieConfirm} disabled={!!cameraError}>📸 Capture &amp; Confirm</Btn>
+            </div>
+          )}
+
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Avatar initials={worker.photo} size={40} status={worker.status} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{worker.name}</div>
+                <div style={{ fontSize: 11, color: T.t3, fontFamily: FONT_MONO }}>{worker.id} · {worker.role}</div>
+              </div>
+            </div>
+            <Btn small onClick={onLogout}>Logout</Btn>
+          </div>
+
+          {/* GATE */}
+          {phase === "gate" && (
+            <div style={{ textAlign: "center", paddingTop: 30 }}>
+              <div style={{ fontSize: 13, color: T.t3, marginBottom: 4 }}>Welcome back</div>
+              <div style={{ fontFamily: FONT_HEAD, fontWeight: 700, fontSize: 22, marginBottom: 24 }}>Scan the gate QR to check in</div>
+              <div onClick={handleGateScan}>
+                <QRTile label="Scan gate QR" sub="Main entrance · attendance + selfie" size="lg" />
+              </div>
+              {scanLog.filter((l) => l.worker === worker.name).length > 0 && (
+                <div style={{ marginTop: 26, textAlign: "left" }}>
+                  <Label>Your recent activity</Label>
+                  {scanLog.filter((l) => l.worker === worker.name).slice(0, 4).map((l, i) => (
+                    <div key={i} style={{ fontSize: 12, color: T.t2, padding: "6px 0", borderBottom: `1px solid ${T.border}` }}>
+                      <span style={{ fontFamily: FONT_MONO, color: T.t3, marginRight: 8 }}>{l.time}</span>{l.event}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ASSIGNING */}
+          {phase === "assigning" && (
+            <div style={{ textAlign: "center", paddingTop: 26 }}>
+              <Badge bg={T.tealBg} fg={T.tealText} dot={T.teal} style={{ marginBottom: 18 }}>Checked in · {worker.checkedInAt}</Badge>
+              <div style={{ fontFamily: FONT_HEAD, fontWeight: 700, fontSize: 20, marginBottom: 6 }}>Ready for your next job?</div>
+              <div style={{ fontSize: 12, color: T.t3, marginBottom: 26 }}>We'll assign the highest-priority order that matches your skills.</div>
+              <Btn primary style={{ width: "100%", justifyContent: "center", padding: "13px 0", fontSize: 14 }} onClick={handleFindWork}>
+                🎯 Get my assignment
+              </Btn>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
+                <Btn style={{ justifyContent: "center" }} onClick={handleBreak}>☕ Lunch break</Btn>
+                <Btn danger style={{ justifyContent: "center" }} onClick={handleEndShift}>🚪 End shift</Btn>
+              </div>
+            </div>
+          )}
+
+          {/* TO MACHINE */}
+          {phase === "toMachine" && myMachine && myOrder && (
+            <div>
+              <Label>Today's job</Label>
+              <div style={{ fontFamily: FONT_HEAD, fontWeight: 700, fontSize: 19, marginBottom: 14 }}>{myOrder.id} — {myOrder.product}</div>
+              <CardSm style={{ marginBottom: 12 }}>
+                <Label>Client</Label>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>{myOrder.client}</div>
+                <Label>Goal</Label>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{fmt(myMachine.goalQty)} trays · {myMachine.type === "production" ? "Production" : "Cutting"} stage</div>
+              </CardSm>
+              <Badge bg={priorityMeta[myOrder.priority].bg} fg={priorityMeta[myOrder.priority].fg} dot={priorityMeta[myOrder.priority].dot} style={{ marginBottom: 14 }}>
+                Dispatch {new Date(myOrder.dispatch).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} · {priorityMeta[myOrder.priority].label} priority
+              </Badge>
+              <div style={{ fontSize: 12, color: T.t3, marginBottom: 18 }}>🛠️ Walk to <b style={{ color: T.t1 }}>{myMachine.label} ({myMachine.id})</b> and scan its QR code to pull up the setup sheet.</div>
+              <div onClick={handleMachineScan}>
+                <QRTile label={`Scan ${myMachine.id} QR`} sub="Machine entry point" size="lg" color={T.teal} />
+              </div>
+            </div>
+          )}
+
+          {/* SETUP */}
+          {phase === "setup" && myMachine && myOrder && (
+            <div>
+              <Badge bg={T.tealBg} fg={T.tealText} dot={T.teal} style={{ marginBottom: 12 }}>{myMachine.id} · {myMachine.label}</Badge>
+              <div style={{ fontFamily: FONT_HEAD, fontWeight: 700, fontSize: 18, marginBottom: 4 }}>Set up for {myOrder.product}</div>
+              <div style={{ fontSize: 12, color: T.t3, marginBottom: 16 }}>
+                {myMachine.type === "production" ? "Dial in coil zones & cycle settings below." : "Dial in blade settings below."} Tap each once it's set on the machine.
+              </div>
+
+              {paramSet.length === 0 ? (
+                <CardSm style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, color: T.t3 }}>No saved parameter profile for this tray/machine combo yet. Set up per your standard SOP, then continue.</div>
+                </CardSm>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 18 }}>
+                  {paramSet.map((p, i) => (
+                    <div key={i} onClick={() => setSetupChecks((s) => ({ ...s, [i]: !s[i] }))} style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      background: setupChecks[i] ? T.tealBg : T.panel,
+                      border: `1px solid ${setupChecks[i] ? "#0d3a35" : T.border}`,
+                      borderRadius: 10, padding: "10px 12px", cursor: "pointer", transition: "all .15s",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 15 }}>{p.icon}</span>
+                        <span style={{ fontSize: 13, color: setupChecks[i] ? T.tealText : T.t2 }}>{p.label}</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontFamily: FONT_MONO, fontSize: 13, fontWeight: 700, color: setupChecks[i] ? T.tealText : T.t1 }}>{p.value}</span>
+                        <span style={{
+                          width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                          border: `1.5px solid ${setupChecks[i] ? T.teal : T.borderHi}`,
+                          background: setupChecks[i] ? T.teal : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: T.bg,
+                        }}>{setupChecks[i] ? "✓" : ""}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <Btn primary style={{
+                width: "100%", justifyContent: "center", padding: "13px 0", fontSize: 14,
+                opacity: paramSet.length > 0 && !allChecked ? 0.45 : 1,
+                cursor: paramSet.length > 0 && !allChecked ? "not-allowed" : "pointer",
+              }} onClick={() => (paramSet.length === 0 || allChecked) && handleConfirmSetup()}>
+                ✅ Confirm setup — start production
+              </Btn>
+              {paramSet.length > 0 && !allChecked && (
+                <div style={{ fontSize: 11, color: T.t3, textAlign: "center", marginTop: 8 }}>
+                  Confirm all {paramSet.length} parameters to continue · {paramSet.filter((_, i) => setupChecks[i]).length}/{paramSet.length} done
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* WORKING */}
+          {phase === "working" && myMachine && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <Label>{myMachine.label}</Label>
+                <Badge bg={T.orangeBg} fg={T.orangeText} dot={T.orange}>Running</Badge>
+              </div>
+              <div style={{ fontFamily: FONT_HEAD, fontWeight: 700, fontSize: 18, marginBottom: 14 }}>{myMachine.type === "production" ? "Tray Production" : "Tray Cutting"}</div>
+
+              <CardSm style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: T.t3 }}>Progress</span>
+                  <span style={{ fontSize: 13, fontFamily: FONT_MONO }}>{fmt(myMachine.doneQty)} / {fmt(myMachine.goalQty)}</span>
+                </div>
+                <Bar value={pct(myMachine.doneQty, myMachine.goalQty)} h={9} color={myMachine.doneQty >= myMachine.goalQty ? T.teal : T.orange} />
+                <div style={{ fontSize: 11, color: T.t3, marginTop: 6 }}>{pct(myMachine.doneQty, myMachine.goalQty)}% complete · started {myMachine.runStart}</div>
+              </CardSm>
+
+              <Label>Log completed trays</Label>
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                <Input type="number" placeholder="e.g. 25" value={logQty} onChange={(e) => setLogQty(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleLogBatch()} />
+                <Btn primary onClick={handleLogBatch}>+ Log</Btn>
+              </div>
+
+              {myMachine.doneQty >= myMachine.goalQty ? (
+                <Btn success style={{ width: "100%", justifyContent: "center", padding: "12px 0", marginBottom: 8 }} onClick={handleGoalAchieved}>
+                  ✅ Goal achieved — notify admin
+                </Btn>
+              ) : (
+                <Btn style={{ width: "100%", justifyContent: "center", marginBottom: 8 }} onClick={handleGoalAchieved}>
+                  Mark complete early / reassign
+                </Btn>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <Btn style={{ justifyContent: "center" }} onClick={handleBreak}>☕ Break</Btn>
+                <Btn danger style={{ justifyContent: "center" }} onClick={handleEndShift}>🚪 End shift</Btn>
+              </div>
+            </div>
+          )}
+
+          {/* BREAK */}
+          {phase === "break" && (
+            <div style={{ textAlign: "center", paddingTop: 50 }}>
+              <div style={{ fontSize: 52, marginBottom: 16 }}>☕</div>
+              <div style={{ fontFamily: FONT_HEAD, fontWeight: 700, fontSize: 20, marginBottom: 6 }}>Enjoy your break</div>
+              <div style={{ fontSize: 12, color: T.t3, marginBottom: 28 }}>Scan the gate QR when you're ready to resume.</div>
+              <div onClick={handleResume}>
+                <QRTile label="Scan gate QR" sub="Resume shift" size="lg" />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ============================================================
+   ADMIN APP
+   ============================================================ */
+const AdminApp = (props) => {
+  const [tab, setTab] = useState("overview");
+  const tabs = [
+    ["overview", "Overview", "▦"],
+    ["orders", "Orders", "▤"],
+    ["workers", "Workers", "◍"],
+    ["machines", "Machines", "⚙"],
+    ["inventory", "Inventory", "▢"],
+  ];
+  return (
+    <div style={{ maxWidth: 1280, margin: "0 auto", padding: "22px 22px 60px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <div style={{ fontFamily: FONT_HEAD, fontWeight: 700, fontSize: 22 }}>Factory Overview</div>
+          <div style={{ fontSize: 12, color: T.t3 }}>{todayStr()} · Live</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 4, background: T.panel, padding: 4, borderRadius: 11, marginBottom: 20, width: "fit-content", flexWrap: "wrap" }}>
+        {tabs.map(([id, label, icon]) => (
+          <button key={id} onClick={() => setTab(id)} style={{
+            padding: "8px 16px", borderRadius: 8, border: "none", cursor: "pointer",
+            background: tab === id ? T.orangeBg : "transparent", color: tab === id ? T.orangeText : T.t2,
+            fontWeight: 700, fontSize: 13, fontFamily: FONT_HEAD, display: "flex", alignItems: "center", gap: 7,
+          }}>
+            <span>{icon}</span>{label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "overview" && <OverviewTab {...props} />}
+      {tab === "orders" && <OrdersTab {...props} />}
+      {tab === "workers" && <WorkersTab {...props} />}
+      {tab === "machines" && <MachinesTab {...props} />}
+      {tab === "inventory" && <InventoryTab {...props} />}
+    </div>
+  );
+};
+
+/* ---------- OVERVIEW ---------- */
+const OverviewTab = ({ workers, machines, orders, scanLog, inventory }) => {
+  const activeWorkers = workers.filter((w) => w.status === "active" || w.status === "idle").length;
+  const onBreak = workers.filter((w) => w.status === "break").length;
+  const running = machines.filter((m) => m.status === "running").length;
+  const idle = machines.filter((m) => m.status === "idle").length;
+  const down = machines.filter((m) => m.status === "down").length;
+  const totalToday = machines.reduce((s, m) => s + m.doneQty, 0);
+  const formedToday = machines.filter(m=>m.type==='production').reduce((s,m)=>s+m.doneQty,0);
+  const cutToday = machines.filter(m=>m.type==='cutting').reduce((s,m)=>s+m.doneQty,0);
+  const activeOrders = orders.filter((o) => o.status === "active").length;
+  const atRisk = orders.filter((o) => o.status === "active" && new Date(o.dispatch) - new Date() < 1000*60*60*48 && pct(o.formedQty,o.qty) < 70).length;
+  const lowStock = [...inventory.raw, ...inventory.pack].filter(i => i.qty < i.min);
+  const sortedOrders = [...orders].filter(o=>o.status==='active').sort((a,b)=> new Date(a.dispatch)-new Date(b.dispatch) || (priorityRank(b.priority)-priorityRank(a.priority)));
+
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
+        <CardSm><Label>Workers on floor</Label><div style={{ fontSize: 26, fontFamily: FONT_HEAD, fontWeight: 700 }}>{activeWorkers}<span style={{fontSize:13,color:T.t3,fontWeight:500}}> / {workers.length}</span></div><div style={{ fontSize: 11, color: T.t3, marginTop: 4 }}>{onBreak} on break</div></CardSm>
+        <CardSm><Label>Trays produced today</Label><div style={{ fontSize: 26, fontFamily: FONT_HEAD, fontWeight: 700, color: T.orangeText }}>{fmt(totalToday)}</div><div style={{ fontSize: 11, color: T.t3, marginTop: 4 }}>{fmt(formedToday)} formed · {fmt(cutToday)} cut</div></CardSm>
+        <CardSm><Label>Machines running</Label><div style={{ fontSize: 26, fontFamily: FONT_HEAD, fontWeight: 700 }}>{running}<span style={{fontSize:13,color:T.t3,fontWeight:500}}> / {machines.length}</span></div><div style={{ fontSize: 11, color: T.t3, marginTop: 4 }}>{idle} idle · {down} down</div></CardSm>
+        <CardSm><Label>Open orders</Label><div style={{ fontSize: 26, fontFamily: FONT_HEAD, fontWeight: 700 }}>{activeOrders}</div><div style={{ fontSize: 11, color: atRisk ? T.redText : T.t3, marginTop: 4 }}>{atRisk} at risk</div></CardSm>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 14, marginBottom: 14 }}>
+        <Card>
+          <CardHd icon="⚙" title="Factory floor" right={<Badge bg={T.orangeBg} fg={T.orangeText} dot={T.orange}>Live</Badge>} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+            {machines.map((m) => <MachineTile key={m.id} m={m} workers={workers} compact />)}
+          </div>
+        </Card>
+        <Card>
+          <CardHd icon="▤" title="Orders by dispatch priority" />
+          <div style={{ maxHeight: 280, overflowY: "auto" }}>
+            {sortedOrders.slice(0,6).map((o) => <OrderRow key={o.id} o={o} />)}
+          </div>
+        </Card>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <Card>
+          <CardHd icon="◍" title="Worker status" />
+          {workers.filter(w=>w.status!=='off-duty').length === 0 && <div style={{fontSize:12,color:T.t3}}>No one checked in yet today.</div>}
+          {workers.filter(w=>w.status!=='off-duty').map((w) => <WorkerRow key={w.id} w={w} machines={machines} orders={orders} />)}
+        </Card>
+        <Card>
+          <CardHd icon="⚠" title="Alerts" />
+          {down > 0 && machines.filter(m=>m.status==='down').map(m => (
+            <AlertRow key={m.id} type="red" title={`Machine ${m.id} is down`} sub={m.notes || "Awaiting maintenance"} />
+          ))}
+          {atRisk > 0 && sortedOrders.filter(o => new Date(o.dispatch) - new Date() < 1000*60*60*48 && pct(o.formedQty,o.qty) < 70).map(o => (
+            <AlertRow key={o.id} type="amber" title={`${o.id} dispatches soon`} sub={`Only ${pct(o.formedQty,o.qty)}% formed · ${o.client}`} />
+          ))}
+          {lowStock.map(i => (
+            <AlertRow key={i.id} type="amber" title={`${i.material || i.item} running low`} sub={`${fmt(i.qty)} ${i.unit} left · min ${fmt(i.min)}`} />
+          ))}
+          {down === 0 && atRisk === 0 && lowStock.length === 0 && (
+            <div style={{ fontSize: 12, color: T.t3 }}>No active alerts. Floor running smoothly. ✅</div>
+          )}
+        </Card>
+      </div>
+    </>
+  );
+};
+const priorityRank = (p) => ({ urgent: 3, high: 2, medium: 1, low: 0 }[p] ?? 0);
+
+const AlertRow = ({ type, title, sub }) => {
+  const map = { red: [T.redBg, T.redText, "#4a1a1a"], amber: ["#2A2410", "#FDE68A", "#5a4a10"] };
+  const [bg, fg, bd] = map[type];
+  return (
+    <div style={{ background: bg, border: `1px solid ${bd}`, borderRadius: 10, padding: "10px 13px", marginBottom: 8 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: fg }}>{title}</div>
+      <div style={{ fontSize: 11, color: fg + "cc", marginTop: 2 }}>{sub}</div>
+    </div>
+  );
+};
+
+const MachineTile = ({ m, workers, compact }) => {
+  const w = workers.find((x) => x.id === m.worker);
+  const map = { running: [T.orange, T.orangeText, "running"], idle: [T.teal, T.tealText, "idle"], pending: ["#EAB308", "#FDE68A", "starting"], down: [T.red, T.redText, "down"] };
+  const [dot, fg, label] = map[m.status] || map.idle;
+  return (
+    <div style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 9px", position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: dot }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
+        <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot }} />
+        <span style={{ fontSize: 12, fontWeight: 700, fontFamily: FONT_HEAD }}>{m.id}</span>
+      </div>
+      <div style={{ fontSize: 10, color: T.t3 }}>{m.label}</div>
+      {w && <div style={{ fontSize: 10, color: T.t2, marginTop: 4 }}>{w.name}</div>}
+      <div style={{ fontSize: 13, fontWeight: 700, color: fg, marginTop: 4, fontFamily: FONT_MONO }}>
+        {m.status === "running" || m.status==="pending" ? `${pct(m.doneQty,m.goalQty)}%` : label}
+      </div>
+      {m.goalQty > 0 && <Bar value={pct(m.doneQty,m.goalQty)} h={3} color={dot} />}
+    </div>
+  );
+};
+
+const OrderRow = ({ o }) => {
+  const p = priorityMeta[o.priority];
+  const formPct = pct(o.formedQty, o.qty);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 11px", background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, marginBottom: 7 }}>
+      <div style={{ fontSize: 11, fontFamily: FONT_MONO, color: T.t3, width: 64, flexShrink: 0 }}>{o.id}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{o.product}</div>
+        <div style={{ fontSize: 11, color: T.t3 }}>{fmt(o.formedQty)} / {fmt(o.qty)} · {new Date(o.dispatch).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</div>
+      </div>
+      <div style={{ width: 64, flexShrink: 0 }}>
+        <div style={{ fontSize: 10, color: T.t2, textAlign: "right", marginBottom: 3 }}>{formPct}%</div>
+        <Bar value={formPct} h={4} color={p.dot} />
+      </div>
+      <Badge bg={p.bg} fg={p.fg} dot={p.dot}>{p.label}</Badge>
+    </div>
+  );
+};
+
+const WorkerRow = ({ w, machines, orders }) => {
+  const m = machines.find((x) => x.id === w.machine);
+  const statusMap = { active: [T.orangeBg, T.orangeText, "working"], idle: [T.blueBg, T.blueText, "idle"], break: ["#2A2410", "#FDE68A", "on break"] };
+  const [bg, fg, label] = statusMap[w.status] || statusMap.idle;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
+      <Avatar initials={w.photo} size={32} status={w.status} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600 }}>{w.name}</div>
+        <div style={{ fontSize: 10, color: T.t3 }}>{m ? `${m.id} · ${fmt(w.todayDone)}/${fmt(w.todayGoal)} trays` : "—"}</div>
+      </div>
+      <Badge bg={bg} fg={fg}>{label}</Badge>
+    </div>
+  );
+};
+
+/* ---------- ORDERS TAB ---------- */
+const OrdersTab = ({ orders, setOrders, showToast }) => {
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ client: "", product: "", qty: "", dispatch: "", priority: "medium" });
+
+  const addOrder = () => {
+    if (!form.client || !form.product || !form.qty || !form.dispatch) { showToast("Fill all fields.", "error"); return; }
+    setOrders((prev) => [...prev, {
+      id: uid("ORD").toUpperCase(), client: form.client, product: form.product,
+      qty: parseInt(form.qty), formedQty: 0, cutQty: 0, dispatch: form.dispatch,
+      priority: form.priority, status: "active",
+    }]);
+    showToast("Order created and queued by dispatch date.", "success");
+    setForm({ client: "", product: "", qty: "", dispatch: "", priority: "medium" });
+    setShowAdd(false);
+  };
+
+  const sorted = [...orders].sort((a, b) => new Date(a.dispatch) - new Date(b.dispatch));
+
+  return (
+    <Card>
+      <CardHd icon="▤" title="All orders" right={<Btn primary small onClick={() => setShowAdd(true)}>+ New order</Btn>} />
+      <table>
+        <thead><tr><th>Order</th><th>Client / Product</th><th>Formed</th><th>Cut</th><th>Dispatch</th><th>Priority</th><th>Status</th></tr></thead>
+        <tbody>
+          {sorted.map((o) => {
+            const p = priorityMeta[o.priority];
+            return (
+              <tr key={o.id}>
+                <td style={{ fontFamily: FONT_MONO, fontSize: 12 }}>{o.id}</td>
+                <td>
+                  <div style={{ fontWeight: 600 }}>{o.client}</div>
+                  <div style={{ fontSize: 11, color: T.t3 }}>{o.product} · {fmt(o.qty)} units</div>
+                </td>
+                <td style={{ width: 110 }}>
+                  <div style={{ fontSize: 11, marginBottom: 3 }}>{fmt(o.formedQty)} ({pct(o.formedQty, o.qty)}%)</div>
+                  <Bar value={pct(o.formedQty, o.qty)} h={4} />
+                </td>
+                <td style={{ width: 110 }}>
+                  <div style={{ fontSize: 11, marginBottom: 3 }}>{fmt(o.cutQty)} ({pct(o.cutQty, o.qty)}%)</div>
+                  <Bar value={pct(o.cutQty, o.qty)} h={4} color={T.teal} />
+                </td>
+                <td style={{ fontSize: 12 }}>{new Date(o.dispatch).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" })}</td>
+                <td><Badge bg={p.bg} fg={p.fg} dot={p.dot}>{p.label}</Badge></td>
+                <td>
+                  {o.status === "completed"
+                    ? <Badge bg={T.tealBg} fg={T.tealText} dot={T.teal}>Completed</Badge>
+                    : <Badge bg={T.panel3} fg={T.t2}>Active</Badge>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Create new order">
+        <Label>Client</Label>
+        <Input value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} placeholder="e.g. Reliance Retail" style={{ marginBottom: 12 }} />
+        <Label>Product / tray type</Label>
+        <Input value={form.product} onChange={(e) => setForm({ ...form, product: e.target.value })} placeholder="e.g. Egg tray 30-cell" style={{ marginBottom: 12 }} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+          <div><Label>Quantity</Label><Input type="number" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} placeholder="8000" /></div>
+          <div><Label>Dispatch date</Label><Input type="date" value={form.dispatch} onChange={(e) => setForm({ ...form, dispatch: e.target.value })} /></div>
+        </div>
+        <Label>Priority</Label>
+        <Select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} style={{ marginBottom: 18 }}>
+          <option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+        </Select>
+        <Btn primary style={{ width: "100%", justifyContent: "center" }} onClick={addOrder}>Create order</Btn>
+      </Modal>
+    </Card>
+  );
+};
+
+/* ---------- WORKERS TAB ---------- */
+const WorkersTab = ({ workers, setWorkers, machines, orders, showToast }) => {
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: "", role: "Operator", skill: ["production"] });
+
+  const addWorker = () => {
+    if (!form.name) { showToast("Enter a name.", "error"); return; }
+    const num = workers.length + 1;
+    const initials = form.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+    setWorkers((prev) => [...prev, {
+      id: `W-${String(num).padStart(3, "0")}`, name: form.name, pin: String(1000 + num),
+      role: form.role, skill: form.skill, status: "off-duty", machine: null, checkedInAt: null,
+      todayDone: 0, todayGoal: 0, currentOrder: null, photo: initials,
+    }]);
+    showToast(`${form.name} added. PIN: ${1000+num}`, "success");
+    setForm({ name: "", role: "Operator", skill: ["production"] });
+    setShowAdd(false);
+  };
+
+  const toggleSkill = (s) => setForm((f) => ({ ...f, skill: f.skill.includes(s) ? f.skill.filter(x=>x!==s) : [...f.skill, s] }));
+
+  return (
+    <Card>
+      <CardHd icon="◍" title={`All workers (${workers.length})`} right={<Btn primary small onClick={() => setShowAdd(true)}>+ Add worker</Btn>} />
+      <table>
+        <thead><tr><th>Worker</th><th>Skills</th><th>Status</th><th>Machine</th><th>Today's output</th><th>PIN</th></tr></thead>
+        <tbody>
+          {workers.map((w) => {
+            const m = machines.find(x => x.id === w.machine);
+            const statusMap = { active: [T.orangeBg, T.orangeText, "Working"], idle: [T.blueBg, T.blueText, "Idle"], break: ["#2A2410", "#FDE68A", "Break"], "off-duty": [T.panel3, T.t2, "Off duty"] };
+            const [bg, fg, label] = statusMap[w.status];
+            return (
+              <tr key={w.id}>
+                <td>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Avatar initials={w.photo} size={28} status={w.status} />
+                    <div><div style={{ fontWeight: 600 }}>{w.name}</div><div style={{ fontSize: 10, color: T.t3, fontFamily: FONT_MONO }}>{w.id}</div></div>
+                  </div>
+                </td>
+                <td>{w.skill.map(s => <Badge key={s} bg={T.panel3} fg={T.t2} style={{ marginRight: 4 }}>{s}</Badge>)}</td>
+                <td><Badge bg={bg} fg={fg}>{label}</Badge></td>
+                <td style={{ fontSize: 12, fontFamily: FONT_MONO }}>{m ? m.id : "—"}</td>
+                <td style={{ fontSize: 12 }}>{w.todayDone > 0 || w.todayGoal > 0 ? `${fmt(w.todayDone)} / ${fmt(w.todayGoal)}` : "—"}</td>
+                <td style={{ fontSize: 12, fontFamily: FONT_MONO, color: T.t3 }}>{w.pin}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add worker">
+        <Label>Full name</Label>
+        <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Arjun Iyer" style={{ marginBottom: 12 }} />
+        <Label>Role</Label>
+        <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} style={{ marginBottom: 12 }}>
+          <option>Operator</option><option>Senior Operator</option><option>Supervisor</option>
+        </Select>
+        <Label>Skills (machine types)</Label>
+        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+          {["production", "cutting"].map((s) => (
+            <div key={s} onClick={() => toggleSkill(s)} style={{
+              padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600,
+              border: `1px solid ${form.skill.includes(s) ? T.orange : T.border}`,
+              background: form.skill.includes(s) ? T.orangeBg : T.panel, color: form.skill.includes(s) ? T.orangeText : T.t2,
+            }}>{s === "production" ? "Tray Production" : "Tray Cutting"}</div>
+          ))}
+        </div>
+        <Btn primary style={{ width: "100%", justifyContent: "center" }} onClick={addWorker}>Add worker</Btn>
+      </Modal>
+    </Card>
+  );
+};
+
+/* ---------- MACHINES TAB ---------- */
+const MachinesTab = ({ machines, setMachines, workers, showToast }) => {
+  const setStatus = (id, status, notes = "") => {
+    setMachines(prev => prev.map(m => m.id === id ? { ...m, status, notes, ...(status==='idle'||status==='down' ? {worker:null, orderId:null, doneQty:0, goalQty:0} : {}) } : m));
+    showToast(`${id} marked ${status}.`, status === 'down' ? 'error' : 'success');
+  };
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      {["production", "cutting"].map((type) => (
+        <Card key={type}>
+          <CardHd icon={type === "production" ? "🏗" : "✂️"} title={type === "production" ? "Production machines" : "Cutting machines"} />
+          {machines.filter((m) => m.type === type).map((m) => {
+            const w = workers.find((x) => x.id === m.worker);
+            return (
+              <div key={m.id} style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 12, padding: "13px 15px", marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <QRGlyph size={32} />
+                    <div><div style={{ fontWeight: 700, fontFamily: FONT_HEAD, fontSize: 13 }}>{m.id}</div><div style={{ fontSize: 11, color: T.t3 }}>{m.label}</div></div>
+                  </div>
+                  <Badge
+                    bg={{ running: T.orangeBg, idle: T.tealBg, pending: "#2A2410", down: T.redBg }[m.status]}
+                    fg={{ running: T.orangeText, idle: T.tealText, pending: "#FDE68A", down: T.redText }[m.status]}
+                  >{m.status}</Badge>
+                </div>
+                {w && <div style={{ fontSize: 12, color: T.t2, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}><Avatar initials={w.photo} size={20} />{w.name}</div>}
+                {m.goalQty > 0 && (
+                  <>
+                    <Bar value={pct(m.doneQty, m.goalQty)} h={5} />
+                    <div style={{ fontSize: 11, color: T.t3, marginTop: 5 }}>{fmt(m.doneQty)} / {fmt(m.goalQty)} trays · {pct(m.doneQty, m.goalQty)}%</div>
+                  </>
+                )}
+                {m.notes && <div style={{ fontSize: 11, color: T.redText, marginTop: 6 }}>⚠ {m.notes}</div>}
+                <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                  {m.status !== "down" && <Btn small danger onClick={() => setStatus(m.id, "down", "Marked down by admin")}>Mark down</Btn>}
+                  {m.status === "down" && <Btn small success onClick={() => setStatus(m.id, "idle")}>Mark fixed</Btn>}
+                </div>
+              </div>
+            );
+          })}
+        </Card>
+      ))}
+    </div>
+  );
+};
+
+/* ---------- INVENTORY TAB ---------- */
+const InventoryTab = ({ inventory, setInventory, showToast }) => {
+  const [sub, setSub] = useState("raw");
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({});
+
+  const subTabs = [["raw", "Raw materials"], ["mould", "Moulds / Tooling"], ["pack", "Packaging"]];
+
+  const addItem = () => {
+    if (sub === "raw") {
+      if (!form.material || !form.qty) return showToast("Fill required fields.", "error");
+      setInventory(p => ({ ...p, raw: [...p.raw, { id: uid("RM"), material: form.material, grade: form.grade || "Standard", qty: parseInt(form.qty), unit: "rolls", thickness: form.thickness || "—", min: parseInt(form.min) || 10 }] }));
+    } else if (sub === "mould") {
+      if (!form.trayType) return showToast("Fill required fields.", "error");
+      setInventory(p => ({ ...p, mould: [...p.mould, { id: uid("M"), trayType: form.trayType, cavity: form.cavity || "—", assignedTo: form.assignedTo || "Storage", condition: "good" }] }));
+    } else {
+      if (!form.item || !form.qty) return showToast("Fill required fields.", "error");
+      setInventory(p => ({ ...p, pack: [...p.pack, { id: uid("PK"), item: form.item, unit: form.unit || "pcs", qty: parseInt(form.qty), usedToday: 0, min: parseInt(form.min) || 50 }] }));
+    }
+    showToast("Stock added.", "success");
+    setForm({}); setShowAdd(false);
+  };
+
+  const adjustQty = (id, delta) => {
+    setInventory(p => ({ ...p, [sub]: p[sub].map(i => i.id === id ? { ...i, qty: Math.max(0, i.qty + delta) } : i) }));
+  };
+
+  return (
+    <Card>
+      <div style={{ display: "flex", gap: 4, background: T.panel, padding: 4, borderRadius: 10, marginBottom: 18, width: "fit-content" }}>
+        {subTabs.map(([id, label]) => (
+          <button key={id} onClick={() => setSub(id)} style={{
+            padding: "7px 14px", borderRadius: 7, border: "none", cursor: "pointer",
+            background: sub === id ? T.orangeBg : "transparent", color: sub === id ? T.orangeText : T.t2,
+            fontWeight: 600, fontSize: 12, fontFamily: FONT_HEAD,
+          }}>{label}</button>
+        ))}
+      </div>
+
+      <CardHd icon="▢" title={subTabs.find(s=>s[0]===sub)[1]} right={<Btn primary small onClick={() => setShowAdd(true)}>+ Add stock</Btn>} />
+
+      {sub === "raw" && (
+        <table>
+          <thead><tr><th>Material</th><th>Grade</th><th>Thickness</th><th>Qty</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {inventory.raw.map(i => (
+              <tr key={i.id}>
+                <td style={{ fontWeight: 600 }}>{i.material}</td><td>{i.grade}</td><td style={{fontFamily:FONT_MONO,fontSize:12}}>{i.thickness}</td>
+                <td style={{fontFamily:FONT_MONO}}>{fmt(i.qty)} {i.unit}</td>
+                <td>{i.qty < i.min ? <Badge bg={T.redBg} fg={T.redText} dot={T.red}>Reorder</Badge> : i.qty < i.min*1.5 ? <Badge bg="#2A2410" fg="#FDE68A" dot="#EAB308">Watch</Badge> : <Badge bg={T.tealBg} fg={T.tealText} dot={T.teal}>OK</Badge>}</td>
+                <td><div style={{display:"flex",gap:4}}><Btn small onClick={()=>adjustQty(i.id,-1)}>−</Btn><Btn small onClick={()=>adjustQty(i.id,1)}>+</Btn></div></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {sub === "mould" && (
+        <table>
+          <thead><tr><th>Mould ID</th><th>Tray type</th><th>Cavity</th><th>Assigned to</th><th>Condition</th></tr></thead>
+          <tbody>
+            {inventory.mould.map(i => (
+              <tr key={i.id}>
+                <td style={{fontFamily:FONT_MONO}}>{i.id}</td><td>{i.trayType}</td><td>{i.cavity}</td><td style={{fontFamily:FONT_MONO,fontSize:12}}>{i.assignedTo}</td>
+                <td>{i.condition === "good" ? <Badge bg={T.tealBg} fg={T.tealText} dot={T.teal}>Good</Badge> : i.condition === "watch" ? <Badge bg="#2A2410" fg="#FDE68A" dot="#EAB308">Wear detected</Badge> : <Badge bg={T.panel3} fg={T.t2}>Stored</Badge>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {sub === "pack" && (
+        <table>
+          <thead><tr><th>Item</th><th>Unit</th><th>Qty</th><th>Used today</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {inventory.pack.map(i => (
+              <tr key={i.id}>
+                <td style={{ fontWeight: 600 }}>{i.item}</td><td>{i.unit}</td>
+                <td style={{fontFamily:FONT_MONO}}>{fmt(i.qty)}</td><td style={{fontFamily:FONT_MONO}}>{fmt(i.usedToday)}</td>
+                <td>{i.qty < i.min ? <Badge bg={T.redBg} fg={T.redText} dot={T.red}>Reorder</Badge> : i.qty < i.min*1.5 ? <Badge bg="#2A2410" fg="#FDE68A" dot="#EAB308">Watch</Badge> : <Badge bg={T.tealBg} fg={T.tealText} dot={T.teal}>OK</Badge>}</td>
+                <td><div style={{display:"flex",gap:4}}><Btn small onClick={()=>adjustQty(i.id,-10)}>−10</Btn><Btn small onClick={()=>adjustQty(i.id,10)}>+10</Btn></div></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title={`Add ${subTabs.find(s=>s[0]===sub)[1].toLowerCase()}`}>
+        {sub === "raw" && <>
+          <Label>Material name</Label><Input value={form.material||""} onChange={e=>setForm({...form,material:e.target.value})} placeholder="e.g. PET sheet" style={{marginBottom:12}} />
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            <div><Label>Grade</Label><Input value={form.grade||""} onChange={e=>setForm({...form,grade:e.target.value})} placeholder="Food-grade" /></div>
+            <div><Label>Thickness</Label><Input value={form.thickness||""} onChange={e=>setForm({...form,thickness:e.target.value})} placeholder="0.3 mm" /></div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+            <div><Label>Quantity (rolls)</Label><Input type="number" value={form.qty||""} onChange={e=>setForm({...form,qty:e.target.value})} /></div>
+            <div><Label>Min. stock alert</Label><Input type="number" value={form.min||""} onChange={e=>setForm({...form,min:e.target.value})} placeholder="10" /></div>
+          </div>
+        </>}
+        {sub === "mould" && <>
+          <Label>Tray type</Label><Input value={form.trayType||""} onChange={e=>setForm({...form,trayType:e.target.value})} placeholder="e.g. Egg tray 30-cell" style={{marginBottom:12}} />
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+            <div><Label>Cavity</Label><Input value={form.cavity||""} onChange={e=>setForm({...form,cavity:e.target.value})} placeholder="6-cavity" /></div>
+            <div><Label>Assigned to</Label><Input value={form.assignedTo||""} onChange={e=>setForm({...form,assignedTo:e.target.value})} placeholder="TF-01 / Storage" /></div>
+          </div>
+        </>}
+        {sub === "pack" && <>
+          <Label>Item</Label><Input value={form.item||""} onChange={e=>setForm({...form,item:e.target.value})} placeholder="e.g. Stretch wrap rolls" style={{marginBottom:12}} />
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:18}}>
+            <div><Label>Unit</Label><Input value={form.unit||""} onChange={e=>setForm({...form,unit:e.target.value})} placeholder="pcs" /></div>
+            <div><Label>Quantity</Label><Input type="number" value={form.qty||""} onChange={e=>setForm({...form,qty:e.target.value})} /></div>
+            <div><Label>Min. alert</Label><Input type="number" value={form.min||""} onChange={e=>setForm({...form,min:e.target.value})} placeholder="50" /></div>
+          </div>
+        </>}
+        <Btn primary style={{width:"100%",justifyContent:"center"}} onClick={addItem}>Add to inventory</Btn>
+      </Modal>
+    </Card>
+  );
+};
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.*
+data/factory.db
+data/factory.db-*
+data/admin.secret
+data/factory-data.json
